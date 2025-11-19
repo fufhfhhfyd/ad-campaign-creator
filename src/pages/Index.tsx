@@ -34,7 +34,7 @@ const Index = () => {
     supabaseKey: '',
     n8nGenerateWebhook: '',
     n8nPostWebhook: '',
-    tableName: 'video_posts'
+    tableName: 'social_media_videos'
   });
 
   const getSupabase = (): SupabaseClient | null => {
@@ -64,10 +64,20 @@ const Index = () => {
         .select('*')
         .order('id', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(`Database error: ${error.message}. Check table name "${settings.tableName}" and RLS policies.`);
+      }
+      
+      console.log('Fetched videos:', data);
       setVideos(data || []);
+      
+      if (data && data.length > 0) {
+        showNotification('success', `Loaded ${data.length} video(s)`);
+      }
     } catch (err: any) {
       showNotification('error', err.message);
+      console.error('Fetch error:', err);
     } finally {
       setLoading(false);
     }
@@ -535,11 +545,20 @@ const Index = () => {
           </button>
         </div>
 
-        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4">
+        <div className="mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4 space-y-3">
           <p className="text-sm text-blue-900">
-            <strong>Note:</strong> You'll need to set up a Supabase project and n8n workflows for video generation and social media posting. 
-            Settings are saved to your browser's localStorage.
+            <strong>Important Setup Steps:</strong>
           </p>
+          <ol className="text-sm text-blue-900 space-y-2 list-decimal list-inside">
+            <li>Set your Supabase URL and Anon Key from your Supabase project settings</li>
+            <li>Make sure your table name matches exactly (default: "social_media_videos")</li>
+            <li><strong>Disable Row Level Security (RLS)</strong> on your table for testing, or create a policy that allows public read access:
+              <pre className="mt-2 p-2 bg-blue-100 rounded text-xs overflow-x-auto">
+ALTER TABLE social_media_videos DISABLE ROW LEVEL SECURITY;
+              </pre>
+            </li>
+            <li>Configure n8n webhooks for video generation and posting</li>
+          </ol>
         </div>
       </div>
     );
