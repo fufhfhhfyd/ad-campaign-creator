@@ -312,6 +312,8 @@ const Index = () => {
     const [activeTab, setActiveTab] = useState<TabType>('reels');
     const [prompt, setPrompt] = useState('');
     const [file, setFile] = useState<File | null>(null);
+    const [productName, setProductName] = useState('');
+    const [productDescription, setProductDescription] = useState('');
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -325,23 +327,18 @@ const Index = () => {
         const supabase = getSupabase();
         let uploadedFileUrl = '';
 
-        if (activeTab !== 'reels' && file && supabase) {
-            const fileName = `${Date.now()}_${file.name.replace(/\s/g, '_')}`;
-            const { error: uploadError } = await supabase.storage
-                .from('videos') 
-                .upload(fileName, file);
-
-            if (uploadError) throw new Error('Upload Failed: ' + uploadError.message);
-
-            const { data: urlData } = supabase.storage.from('videos').getPublicUrl(fileName);
-            uploadedFileUrl = urlData.publicUrl;
+        // Skip Supabase Storage upload - let n8n handle file processing
+        if (activeTab !== 'reels' && file) {
+            uploadedFileUrl = file.name; // Just reference filename
         }
 
         const payload = {
-            video_title: activeTab === 'reels' ? 'Facebook Reel Campaign' : 'Ad Campaign',
-            post_caption: prompt, 
+            post_title: activeTab === 'reels' 
+                ? 'Facebook Reel Campaign' 
+                : (productName || 'Ad Campaign'),
+            caption: prompt, 
+            hashtag: null,
             video_url: null,
-            file_url: uploadedFileUrl,
             youtube_post_status: 'pending',
             facebook_post_status: 'pending',
             instagram_post_status: 'pending'
@@ -356,20 +353,44 @@ const Index = () => {
             
             if (error) throw error;
 
-            await fetch(settings.n8nGenerateWebhook, {
+            // Send comprehensive data to n8n webhook
+            const webhookPayload = {
+                // Database record
+                id: data.id,
+                post_title: data.post_title,
+                caption: data.caption,
+                video_url: data.video_url,
+                hashtag: data.hashtag,
+                youtube_post_status: data.youtube_post_status,
+                facebook_post_status: data.facebook_post_status,
+                instagram_post_status: data.instagram_post_status,
+                
+                // Additional details for n8n processing
+                type: activeTab,
+                prompt_text: prompt,
+                product_name: productName || null,
+                product_description: productDescription || null,
+                file_name: uploadedFileUrl || null,
+                timestamp: new Date().toISOString()
+            };
+
+            console.log('Sending to n8n webhook:', webhookPayload);
+
+            const webhookResponse = await fetch(settings.n8nGenerateWebhook, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    ...payload, 
-                    id: data.id, 
-                    type: activeTab,
-                    prompt_text: prompt 
-                }),
+                body: JSON.stringify(webhookPayload),
             });
+
+            if (!webhookResponse.ok) {
+                throw new Error(`Webhook failed: ${webhookResponse.status}`);
+            }
             
             showNotification('success', 'Ad request sent successfully!');
             setPrompt('');
             setFile(null);
+            setProductName('');
+            setProductDescription('');
             setActiveView('dashboard');
         }
 
@@ -425,26 +446,58 @@ const Index = () => {
             </div>
 
             {activeTab !== 'reels' && (
-              <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
-                <label className="block text-sm font-bold text-foreground">
-                   {activeTab === 'product' ? 'Product Image/Video' : 'UGC Raw Footage'}
-                </label>
-                <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:bg-muted transition-colors group cursor-pointer relative">
+              <>
+                {/* Product Name */}
+                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
+                  <label className="block text-sm font-bold text-foreground">
+                    Product Name
+                  </label>
                   <input 
-                      type="file" 
-                      required 
-                      onChange={e => setFile(e.target.files?.[0] || null)}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      accept="image/*,video/*"
+                    type="text"
+                    required
+                    className="w-full p-4 border border-border rounded-xl bg-muted focus:bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+                    placeholder="Enter product name..."
+                    value={productName}
+                    onChange={e => setProductName(e.target.value)}
                   />
-                  <div className="flex flex-col items-center gap-3 text-muted-foreground group-hover:text-primary transition-colors">
-                    <Upload size={32} />
-                    <span className="text-sm font-medium">
-                        {file ? file.name : "Click to upload or drag and drop"}
-                    </span>
+                </div>
+
+                {/* Product Description */}
+                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
+                  <label className="block text-sm font-bold text-foreground">
+                    Product Description
+                  </label>
+                  <textarea 
+                    required
+                    className="w-full p-4 border border-border rounded-xl bg-muted focus:bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all h-24 resize-none outline-none"
+                    placeholder="Describe your product features and benefits..."
+                    value={productDescription}
+                    onChange={e => setProductDescription(e.target.value)}
+                  />
+                </div>
+
+                {/* File Upload */}
+                <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
+                  <label className="block text-sm font-bold text-foreground">
+                     {activeTab === 'product' ? 'Product Image/Video' : 'UGC Raw Footage'}
+                  </label>
+                  <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:bg-muted transition-colors group cursor-pointer relative">
+                    <input 
+                        type="file" 
+                        required 
+                        onChange={e => setFile(e.target.files?.[0] || null)}
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        accept="image/*,video/*"
+                    />
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground group-hover:text-primary transition-colors">
+                      <Upload size={32} />
+                      <span className="text-sm font-medium">
+                          {file ? file.name : "Click to upload or drag and drop"}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
+              </>
             )}
 
             <button 
