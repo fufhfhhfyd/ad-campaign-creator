@@ -8,14 +8,13 @@ type TabType = 'reels' | 'product' | 'ugc';
 
 interface VideoPost {
   id: string;
-  video_title: string;
-  post_caption: string;
   video_url: string | null;
+  post_title: string;
+  caption: string;
   hashtag: string | null;
   youtube_post_status: string;
-  facebook_post_status: string;
   instagram_post_status: string;
-  created_at: string;
+  facebook_post_status: string;
 }
 
 interface AppSettings {
@@ -63,7 +62,7 @@ const Index = () => {
       const { data, error } = await supabase
         .from(settings.tableName)
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('id', { ascending: false });
 
       if (error) throw error;
       setVideos(data || []);
@@ -233,7 +232,7 @@ const Index = () => {
                     
                     <div className="flex justify-between items-start">
                       <h3 className="text-xl font-bold text-foreground leading-tight">
-                        {video.video_title || 'Untitled Campaign'}
+                        {video.post_title || 'Untitled Campaign'}
                       </h3>
                       <span className="text-xs font-mono text-muted-foreground bg-secondary px-2 py-1 rounded">
                         {video.hashtag ? 'Ad Campaign' : 'Social Post'}
@@ -243,7 +242,7 @@ const Index = () => {
                     <div className="space-y-2">
                       <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</label>
                       <p className="text-foreground text-sm leading-relaxed bg-muted p-4 rounded-lg border border-border max-h-32 overflow-y-auto">
-                        {video.post_caption || 'No description generated yet.'}
+                        {video.caption || 'No description generated yet.'}
                       </p>
                     </div>
 
