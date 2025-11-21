@@ -21,6 +21,7 @@ interface AppSettings {
   supabaseUrl: string;
   supabaseKey: string;
   n8nGenerateWebhook: string;
+  n8nPostWebhook: string;
   tableName: string;
 }
 
@@ -32,6 +33,7 @@ const Index = () => {
     supabaseUrl: '',
     supabaseKey: '',
     n8nGenerateWebhook: '',
+    n8nPostWebhook: '',
     tableName: 'social_media_videos'
   });
 
@@ -90,6 +92,48 @@ const Index = () => {
     link.click();
     document.body.removeChild(link);
     showNotification('success', 'Download started!');
+  };
+
+  const handlePostToSocials = async (video: VideoPost) => {
+    if (!settings.n8nPostWebhook) {
+      showNotification('error', 'Please configure n8n Post to Socials Webhook in Settings');
+      return;
+    }
+
+    try {
+      const response = await fetch(settings.n8nPostWebhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(video),
+      });
+
+      if (!response.ok) throw new Error('Failed to post to socials');
+      
+      showNotification('success', 'Posted to social media successfully!');
+    } catch (err: any) {
+      console.error('Post to socials error:', err);
+      showNotification('error', err.message);
+    }
+  };
+
+  const updateVideoField = async (videoId: string, field: 'post_title' | 'caption', value: string) => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    try {
+      const { error } = await supabase
+        .from(settings.tableName)
+        .update({ [field]: value })
+        .eq('id', videoId);
+
+      if (error) throw error;
+      
+      setVideos(prev => prev.map(v => v.id === videoId ? { ...v, [field]: value } : v));
+      showNotification('success', 'Updated successfully');
+    } catch (err: any) {
+      console.error('Update error:', err);
+      showNotification('error', err.message);
+    }
   };
 
   useEffect(() => {
@@ -236,20 +280,25 @@ const Index = () => {
                 <div className="flex-1 flex flex-col justify-between">
                   <div className="space-y-6">
                     
-                    <div className="flex justify-between items-start">
-                      <h3 className="text-xl font-bold text-foreground leading-tight">
-                        {video.post_title || 'Untitled Campaign'}
-                      </h3>
-                      <span className="text-xs font-mono text-muted-foreground bg-secondary px-2 py-1 rounded">
-                        {video.hashtag ? 'Ad Campaign' : 'Social Post'}
-                      </span>
+                    <div className="space-y-2">
+                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Title</label>
+                      <input
+                        type="text"
+                        value={video.post_title || ''}
+                        onChange={(e) => updateVideoField(video.id, 'post_title', e.target.value)}
+                        className="w-full text-xl font-bold text-foreground p-3 rounded-lg border border-border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+                        placeholder="Enter title..."
+                      />
                     </div>
 
                     <div className="space-y-2">
                       <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</label>
-                      <p className="text-foreground text-sm leading-relaxed bg-muted p-4 rounded-lg border border-border max-h-32 overflow-y-auto">
-                        {video.caption || 'No description generated yet.'}
-                      </p>
+                      <textarea
+                        value={video.caption || ''}
+                        onChange={(e) => updateVideoField(video.id, 'caption', e.target.value)}
+                        className="w-full text-foreground text-sm leading-relaxed bg-background p-4 rounded-lg border border-border max-h-32 resize-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+                        placeholder="Enter description..."
+                      />
                     </div>
 
                     {video.hashtag && (
@@ -264,15 +313,24 @@ const Index = () => {
                     )}
                   </div>
 
-                  <div className="mt-8 pt-6 border-t border-border">
+                  <div className="mt-8 pt-6 border-t border-border space-y-3">
                       {video.video_url && (
-                        <button 
-                            onClick={() => handleDownload(video.video_url!, `ad_${video.id}.${video.video_url.match(/\.(jpg|jpeg|png|gif|webp|mp4|mov)$/i)?.[1] || 'mp4'}`)}
-                            className="w-full py-3 bg-gradient-blue text-white font-bold rounded-xl shadow-medium hover:shadow-large transition-all flex justify-center items-center gap-2"
-                        >
-                            <Download size={18} />
-                            Download Media
-                        </button>
+                        <>
+                          <button 
+                              onClick={() => handleDownload(video.video_url!, `ad_${video.id}.${video.video_url.match(/\.(jpg|jpeg|png|gif|webp|mp4|mov)$/i)?.[1] || 'mp4'}`)}
+                              className="w-full py-3 bg-gradient-blue text-white font-bold rounded-xl shadow-medium hover:shadow-large transition-all flex justify-center items-center gap-2"
+                          >
+                              <Download size={18} />
+                              Download Media
+                          </button>
+                          <button 
+                              onClick={() => handlePostToSocials(video)}
+                              className="w-full py-3 bg-gradient-pink text-white font-bold rounded-xl shadow-medium hover:shadow-large transition-all flex justify-center items-center gap-2"
+                          >
+                              <CheckCircle2 size={18} />
+                              Post to Social Media
+                          </button>
+                        </>
                       )}
                     <p className="text-center text-[10px] text-muted-foreground mt-2">
                       ID: {video.id}
@@ -608,6 +666,17 @@ const Index = () => {
               placeholder="https://your-n8n-instance.app/webhook/generate"
               value={tempSettings.n8nGenerateWebhook}
               onChange={e => setTempSettings({...tempSettings, n8nGenerateWebhook: e.target.value})}
+              className="w-full p-3 border border-border rounded-xl bg-muted focus:bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
+            />
+          </div>
+
+          <div className="space-y-3">
+            <label className="block text-sm font-bold text-foreground">n8n Post to Socials Webhook</label>
+            <input
+              type="url"
+              placeholder="https://your-n8n-instance.app/webhook/post-to-socials"
+              value={tempSettings.n8nPostWebhook}
+              onChange={e => setTempSettings({...tempSettings, n8nPostWebhook: e.target.value})}
               className="w-full p-3 border border-border rounded-xl bg-muted focus:bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
             />
           </div>
