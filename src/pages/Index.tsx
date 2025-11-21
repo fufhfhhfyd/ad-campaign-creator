@@ -212,6 +212,27 @@ const Index = () => {
   );
 
   function DashboardView() {
+    const [editingFields, setEditingFields] = useState<{[key: string]: {post_title: string, caption: string}}>({});
+
+    const handleFieldChange = (videoId: string, field: 'post_title' | 'caption', value: string) => {
+      setEditingFields(prev => ({
+        ...prev,
+        [videoId]: {
+          ...prev[videoId],
+          [field]: value
+        }
+      }));
+    };
+
+    const handleFieldBlur = (videoId: string, field: 'post_title' | 'caption') => {
+      const editedValue = editingFields[videoId]?.[field];
+      const currentVideo = videos.find(v => v.id === videoId);
+      
+      if (editedValue !== undefined && currentVideo && editedValue !== currentVideo[field]) {
+        updateVideoField(videoId, field, editedValue);
+      }
+    };
+
     return (
       <div className="space-y-8">
         <div className="flex justify-between items-center">
@@ -284,8 +305,9 @@ const Index = () => {
                       <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Title</label>
                       <input
                         type="text"
-                        value={video.post_title || ''}
-                        onChange={(e) => updateVideoField(video.id, 'post_title', e.target.value)}
+                        value={editingFields[video.id]?.post_title ?? video.post_title ?? ''}
+                        onChange={(e) => handleFieldChange(video.id, 'post_title', e.target.value)}
+                        onBlur={() => handleFieldBlur(video.id, 'post_title')}
                         className="w-full text-xl font-bold text-foreground p-3 rounded-lg border border-border bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
                         placeholder="Enter title..."
                       />
@@ -294,8 +316,9 @@ const Index = () => {
                     <div className="space-y-2">
                       <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</label>
                       <textarea
-                        value={video.caption || ''}
-                        onChange={(e) => updateVideoField(video.id, 'caption', e.target.value)}
+                        value={editingFields[video.id]?.caption ?? video.caption ?? ''}
+                        onChange={(e) => handleFieldChange(video.id, 'caption', e.target.value)}
+                        onBlur={() => handleFieldBlur(video.id, 'caption')}
                         className="w-full text-foreground text-sm leading-relaxed bg-background p-4 rounded-lg border border-border max-h-32 resize-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
                         placeholder="Enter description..."
                       />
