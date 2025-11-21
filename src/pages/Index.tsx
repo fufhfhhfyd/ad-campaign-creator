@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Video, Settings as SettingsIcon, Plus, RefreshCw, Loader2, Send, Upload, PlayCircle, CheckCircle2 } from 'lucide-react';
+import { Video, Settings as SettingsIcon, Plus, RefreshCw, Loader2, Upload, PlayCircle, CheckCircle2, Download } from 'lucide-react';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
@@ -21,7 +21,6 @@ interface AppSettings {
   supabaseUrl: string;
   supabaseKey: string;
   n8nGenerateWebhook: string;
-  n8nPostWebhook: string;
   tableName: string;
 }
 
@@ -33,7 +32,6 @@ const Index = () => {
     supabaseUrl: '',
     supabaseKey: '',
     n8nGenerateWebhook: '',
-    n8nPostWebhook: '',
     tableName: 'social_media_videos'
   });
 
@@ -83,27 +81,15 @@ const Index = () => {
     }
   };
 
-  const handlePostToSocials = async (video: VideoPost) => {
-    if (!settings.n8nPostWebhook) {
-      showNotification('error', 'Please configure n8n post webhook in settings');
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await fetch(settings.n8nPostWebhook, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(video),
-      });
-      
-      showNotification('success', 'Post request sent to social platforms!');
-      await fetchVideos();
-    } catch (err: any) {
-      showNotification('error', err.message);
-    } finally {
-      setLoading(false);
-    }
+  const handleDownload = (url: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showNotification('success', 'Download started!');
   };
 
   useEffect(() => {
@@ -220,18 +206,28 @@ const Index = () => {
             videos.map((video) => (
               <div key={video.id} className="bg-white rounded-2xl shadow-medium border border-border overflow-hidden flex flex-col md:flex-row p-6 gap-8 hover:shadow-large transition-all">
                 
-                {/* Video Player */}
+                {/* Media Display */}
                 <div className="w-full md:w-1/3 flex-shrink-0 bg-slate-900 rounded-xl overflow-hidden relative aspect-[9/16] md:aspect-auto md:h-[400px]">
                   {video.video_url ? (
-                    <video 
-                      src={video.video_url} 
-                      controls 
-                      className="w-full h-full object-cover" 
-                    />
+                    <>
+                      {video.video_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+                        <img 
+                          src={video.video_url} 
+                          alt={video.post_title}
+                          className="w-full h-full object-cover" 
+                        />
+                      ) : (
+                        <video 
+                          src={video.video_url} 
+                          controls 
+                          className="w-full h-full object-cover" 
+                        />
+                      )}
+                    </>
                   ) : (
                     <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground bg-muted">
                       <Loader2 className="w-10 h-10 animate-spin mb-2 text-primary" />
-                      <span className="text-sm font-medium">Processing Video...</span>
+                      <span className="text-sm font-medium">Processing...</span>
                     </div>
                   )}
                 </div>
@@ -266,35 +262,18 @@ const Index = () => {
                           </div>
                        </div>
                     )}
-
-                    <div className="space-y-3">
-                      <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Social Media Status</label>
-                      <div className="flex flex-wrap gap-3">
-                          <div className="flex items-center gap-2 text-xs border border-border px-3 py-1.5 rounded-full bg-muted">
-                              <div className={`w-2 h-2 rounded-full ${video.instagram_post_status === 'posted' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                              <span>Instagram: {video.instagram_post_status || 'Pending'}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-xs border border-border px-3 py-1.5 rounded-full bg-muted">
-                              <div className={`w-2 h-2 rounded-full ${video.facebook_post_status === 'posted' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                              <span>Facebook: {video.facebook_post_status || 'Pending'}</span>
-                          </div>
-                           <div className="flex items-center gap-2 text-xs border border-border px-3 py-1.5 rounded-full bg-muted">
-                              <div className={`w-2 h-2 rounded-full ${video.youtube_post_status === 'posted' ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                              <span>YouTube: {video.youtube_post_status || 'Pending'}</span>
-                          </div>
-                      </div>
-                    </div>
                   </div>
 
                   <div className="mt-8 pt-6 border-t border-border">
-                      <button 
-                          onClick={() => handlePostToSocials(video)}
-                          disabled={loading || !video.video_url}
-                          className="w-full py-3 bg-gradient-pink text-white font-bold rounded-xl shadow-medium hover:shadow-large transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                          {loading ? <Loader2 className="animate-spin" /> : <Send size={18} />}
-                          Post to Social Media
-                      </button>
+                      {video.video_url && (
+                        <button 
+                            onClick={() => handleDownload(video.video_url!, `ad_${video.id}.${video.video_url.match(/\.(jpg|jpeg|png|gif|webp|mp4|mov)$/i)?.[1] || 'mp4'}`)}
+                            className="w-full py-3 bg-gradient-blue text-white font-bold rounded-xl shadow-medium hover:shadow-large transition-all flex justify-center items-center gap-2"
+                        >
+                            <Download size={18} />
+                            Download Media
+                        </button>
+                      )}
                     <p className="text-center text-[10px] text-muted-foreground mt-2">
                       ID: {video.id}
                     </p>
@@ -312,8 +291,22 @@ const Index = () => {
     const [activeTab, setActiveTab] = useState<TabType>('reels');
     const [prompt, setPrompt] = useState('');
     const [file, setFile] = useState<File | null>(null);
+    const [filePreview, setFilePreview] = useState<string | null>(null);
     const [productName, setProductName] = useState('');
     const [productDescription, setProductDescription] = useState('');
+
+    const handleFileChange = (selectedFile: File | null) => {
+      setFile(selectedFile);
+      if (selectedFile) {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setFilePreview(reader.result as string);
+        };
+        reader.readAsDataURL(selectedFile);
+      } else {
+        setFilePreview(null);
+      }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
@@ -325,16 +318,10 @@ const Index = () => {
       setLoading(true);
       try {
         const supabase = getSupabase();
-        let uploadedFileUrl = '';
-
-        // Skip Supabase Storage upload - let n8n handle file processing
-        if (activeTab !== 'reels' && file) {
-            uploadedFileUrl = file.name; // Just reference filename
-        }
 
         const payload = {
             post_title: activeTab === 'reels' 
-                ? 'Facebook Reel Campaign' 
+                ? 'Update Product Image' 
                 : (productName || 'Ad Campaign'),
             caption: prompt, 
             hashtag: null,
@@ -353,6 +340,21 @@ const Index = () => {
             
             if (error) throw error;
 
+            // Prepare file data for n8n
+            let fileData = null;
+            if (file) {
+              const base64 = await new Promise<string>((resolve) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result as string);
+                reader.readAsDataURL(file);
+              });
+              fileData = {
+                name: file.name,
+                type: file.type,
+                data: base64
+              };
+            }
+
             // Send comprehensive data to n8n webhook
             const webhookPayload = {
                 // Database record
@@ -370,11 +372,12 @@ const Index = () => {
                 prompt_text: prompt,
                 product_name: productName || null,
                 product_description: productDescription || null,
-                file_name: uploadedFileUrl || null,
+                file: fileData,
                 timestamp: new Date().toISOString()
             };
 
-            console.log('Sending to n8n webhook:', webhookPayload);
+            console.log('Sending to n8n webhook:', settings.n8nGenerateWebhook);
+            console.log('Webhook payload:', { ...webhookPayload, file: fileData ? 'FILE_DATA_PRESENT' : null });
 
             const webhookResponse = await fetch(settings.n8nGenerateWebhook, {
                 method: 'POST',
@@ -383,18 +386,22 @@ const Index = () => {
             });
 
             if (!webhookResponse.ok) {
-                throw new Error(`Webhook failed: ${webhookResponse.status}`);
+                const errorText = await webhookResponse.text();
+                throw new Error(`Webhook failed (${webhookResponse.status}): ${errorText}`);
             }
             
-            showNotification('success', 'Ad request sent successfully!');
+            console.log('Webhook response:', await webhookResponse.text());
+            showNotification('success', 'Ad generation request sent successfully!');
             setPrompt('');
             setFile(null);
+            setFilePreview(null);
             setProductName('');
             setProductDescription('');
             setActiveView('dashboard');
         }
 
       } catch (err: any) {
+        console.error('Submit error:', err);
         showNotification('error', err.message);
       } finally {
         setLoading(false);
@@ -411,10 +418,10 @@ const Index = () => {
         <div className="bg-white rounded-2xl shadow-xl border border-border overflow-hidden">
           <div className="flex border-b bg-muted/50">
             <button 
-              onClick={() => { setActiveTab('reels'); setFile(null); }}
+              onClick={() => { setActiveTab('reels'); setFile(null); setFilePreview(null); }}
               className={`flex-1 py-4 text-sm font-semibold transition-all ${activeTab === 'reels' ? 'bg-white border-b-2 border-accent text-accent shadow-soft' : 'text-muted-foreground hover:text-foreground'}`}
             >
-              Facebook Reels
+              Update Product Image
             </button>
             <button 
               onClick={() => setActiveTab('product')}
@@ -432,14 +439,43 @@ const Index = () => {
 
           <form onSubmit={handleSubmit} className="p-8 space-y-8">
             
+            {/* File Upload for Reels Tab */}
+            {activeTab === 'reels' && (
+              <div className="space-y-3">
+                <label className="block text-sm font-bold text-foreground">
+                  Upload Image
+                </label>
+                <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:bg-muted transition-colors group cursor-pointer relative">
+                  <input 
+                      type="file" 
+                      required 
+                      onChange={e => handleFileChange(e.target.files?.[0] || null)}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      accept="image/*"
+                  />
+                  {filePreview ? (
+                    <div className="space-y-3">
+                      <img src={filePreview} alt="Preview" className="max-h-48 mx-auto rounded-lg" />
+                      <p className="text-sm text-muted-foreground">{file?.name}</p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground group-hover:text-primary transition-colors">
+                      <Upload size={32} />
+                      <span className="text-sm font-medium">Click to upload image</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="space-y-3">
                <label className="block text-sm font-bold text-foreground">
-                 {activeTab === 'reels' ? 'Video Concept / Prompt' : 'Ad Instructions / Prompt'}
+                 {activeTab === 'reels' ? 'AI Prompt Instructions' : 'Ad Instructions / Prompt'}
                </label>
                <textarea 
                  required
                  className="w-full p-4 border border-border rounded-xl bg-muted focus:bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all h-32 resize-none outline-none"
-                 placeholder={activeTab === 'reels' ? "Describe the viral reel you want to create..." : "Describe the product benefits and the vibe of the video..."}
+                 placeholder={activeTab === 'reels' ? "Describe what changes or enhancements you want..." : "Describe the product benefits and the vibe of the video..."}
                  value={prompt}
                  onChange={e => setPrompt(e.target.value)}
                />
@@ -485,16 +521,25 @@ const Index = () => {
                     <input 
                         type="file" 
                         required 
-                        onChange={e => setFile(e.target.files?.[0] || null)}
+                        onChange={e => handleFileChange(e.target.files?.[0] || null)}
                         className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                         accept="image/*,video/*"
                     />
-                    <div className="flex flex-col items-center gap-3 text-muted-foreground group-hover:text-primary transition-colors">
-                      <Upload size={32} />
-                      <span className="text-sm font-medium">
-                          {file ? file.name : "Click to upload or drag and drop"}
-                      </span>
-                    </div>
+                    {filePreview ? (
+                      <div className="space-y-3">
+                        {file?.type.startsWith('image/') ? (
+                          <img src={filePreview} alt="Preview" className="max-h-48 mx-auto rounded-lg" />
+                        ) : (
+                          <video src={filePreview} className="max-h-48 mx-auto rounded-lg" controls />
+                        )}
+                        <p className="text-sm text-muted-foreground">{file?.name}</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-3 text-muted-foreground group-hover:text-primary transition-colors">
+                        <Upload size={32} />
+                        <span className="text-sm font-medium">Click to upload or drag and drop</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
@@ -563,17 +608,6 @@ const Index = () => {
               placeholder="https://your-n8n-instance.app/webhook/generate"
               value={tempSettings.n8nGenerateWebhook}
               onChange={e => setTempSettings({...tempSettings, n8nGenerateWebhook: e.target.value})}
-              className="w-full p-3 border border-border rounded-xl bg-muted focus:bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
-            />
-          </div>
-
-          <div className="space-y-3">
-            <label className="block text-sm font-bold text-foreground">n8n Post to Socials Webhook</label>
-            <input
-              type="url"
-              placeholder="https://your-n8n-instance.app/webhook/post"
-              value={tempSettings.n8nPostWebhook}
-              onChange={e => setTempSettings({...tempSettings, n8nPostWebhook: e.target.value})}
               className="w-full p-3 border border-border rounded-xl bg-muted focus:bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all outline-none"
             />
           </div>
