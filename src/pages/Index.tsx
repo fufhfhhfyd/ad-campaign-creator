@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Video, Settings as SettingsIcon, Plus, RefreshCw, Loader2, Upload, PlayCircle, CheckCircle2, Download } from 'lucide-react';
+import { Video, Settings as SettingsIcon, Plus, RefreshCw, Loader2, Upload, PlayCircle, CheckCircle2, Download, X } from 'lucide-react';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { toast } from 'sonner';
 
@@ -382,6 +382,29 @@ const Index = () => {
     const [productDescription, setProductDescription] = useState('');
     const [aspectRatio, setAspectRatio] = useState<'Portrait' | 'Landscape'>('Portrait');
 
+    // Load persisted data on mount
+    useEffect(() => {
+      const saved = localStorage.getItem('createAdFormData');
+      if (saved) {
+        const data = JSON.parse(saved);
+        setPrompt(data.prompt || '');
+        setProductName(data.productName || '');
+        setProductDescription(data.productDescription || '');
+        setAspectRatio(data.aspectRatio || 'Portrait');
+      }
+    }, []);
+
+    // Persist data on change
+    useEffect(() => {
+      const formData = {
+        prompt,
+        productName,
+        productDescription,
+        aspectRatio
+      };
+      localStorage.setItem('createAdFormData', JSON.stringify(formData));
+    }, [prompt, productName, productDescription, aspectRatio]);
+
     const handleFileChange = (selectedFile: File | null) => {
       setFile(selectedFile);
       if (selectedFile) {
@@ -401,8 +424,13 @@ const Index = () => {
       // Check if at least one webhook is configured
       const webhookUrl = settings.n8nGenerateWebhook || settings.n8nPostWebhook;
       
-      if (!settings.supabaseUrl || !webhookUrl) {
-        showNotification('error', 'Please configure Supabase URL and at least one n8n webhook in Settings!');
+      if (!webhookUrl) {
+        showNotification('error', 'Please configure at least one n8n webhook in Settings!');
+        return;
+      }
+      
+      if (!settings.supabaseUrl) {
+        showNotification('error', 'Please configure Supabase URL in Settings!');
         return;
       }
 
@@ -487,12 +515,7 @@ const Index = () => {
             
             console.log('Webhook response:', await webhookResponse.text());
             showNotification('success', 'Ad generation request sent successfully!');
-            setPrompt('');
-            setFile(null);
-            setFilePreview(null);
-            setProductName('');
-            setProductDescription('');
-            setAspectRatio('Portrait');
+            // Don't clear form data - data persists until manually cleared
             setActiveView('dashboard');
         }
 
@@ -538,9 +561,21 @@ const Index = () => {
             {/* File Upload for Reels Tab */}
             {activeTab === 'reels' && (
               <div className="space-y-3">
-                <label className="block text-sm font-bold text-foreground">
-                  Upload Image
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="block text-sm font-bold text-foreground">
+                    Upload Image
+                  </label>
+                  {file && (
+                    <button
+                      type="button"
+                      onClick={() => handleFileChange(null)}
+                      className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      title="Clear file"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
                 <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:bg-muted transition-colors group cursor-pointer relative">
                   <input 
                       type="file" 
@@ -565,9 +600,21 @@ const Index = () => {
             )}
 
             <div className="space-y-3">
-               <label className="block text-sm font-bold text-foreground">
-                 {activeTab === 'reels' ? 'AI Prompt Instructions' : 'Ad Instructions / Prompt'}
-               </label>
+               <div className="flex items-center justify-between">
+                 <label className="block text-sm font-bold text-foreground">
+                   {activeTab === 'reels' ? 'AI Prompt Instructions' : 'Ad Instructions / Prompt'}
+                 </label>
+                 {prompt && (
+                   <button
+                     type="button"
+                     onClick={() => setPrompt('')}
+                     className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                     title="Clear prompt"
+                   >
+                     <X size={16} />
+                   </button>
+                 )}
+               </div>
                <textarea 
                  required
                  className="w-full p-4 border border-border rounded-xl bg-muted focus:bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all h-32 resize-none outline-none"
@@ -612,9 +659,21 @@ const Index = () => {
               <>
                 {/* Product Name */}
                 <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
-                  <label className="block text-sm font-bold text-foreground">
-                    Product Name
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-bold text-foreground">
+                      Product Name
+                    </label>
+                    {productName && (
+                      <button
+                        type="button"
+                        onClick={() => setProductName('')}
+                        className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        title="Clear product name"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
                   <input 
                     type="text"
                     required
@@ -627,9 +686,21 @@ const Index = () => {
 
                 {/* Product Description */}
                 <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
-                  <label className="block text-sm font-bold text-foreground">
-                    Product Description
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-bold text-foreground">
+                      Product Description
+                    </label>
+                    {productDescription && (
+                      <button
+                        type="button"
+                        onClick={() => setProductDescription('')}
+                        className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        title="Clear description"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
                   <textarea 
                     required
                     className="w-full p-4 border border-border rounded-xl bg-muted focus:bg-background focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all h-24 resize-none outline-none"
@@ -641,9 +712,21 @@ const Index = () => {
 
                 {/* File Upload */}
                 <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
-                  <label className="block text-sm font-bold text-foreground">
-                     {activeTab === 'product' ? 'Product Image/Video' : 'UGC Raw Footage'}
-                  </label>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-bold text-foreground">
+                       {activeTab === 'product' ? 'Product Image/Video' : 'UGC Raw Footage'}
+                    </label>
+                    {file && (
+                      <button
+                        type="button"
+                        onClick={() => handleFileChange(null)}
+                        className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        title="Clear file"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
                   <div className="border-2 border-dashed border-border rounded-xl p-8 text-center hover:bg-muted transition-colors group cursor-pointer relative">
                     <input 
                         type="file" 
