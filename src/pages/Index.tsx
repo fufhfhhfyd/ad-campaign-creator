@@ -382,7 +382,7 @@ const Index = () => {
     const [productDescription, setProductDescription] = useState('');
     const [aspectRatio, setAspectRatio] = useState<'Portrait' | 'Landscape'>('Portrait');
 
-    // Load persisted data on mount
+    // Load persisted data on mount (including image preview)
     useEffect(() => {
       const saved = localStorage.getItem('createAdFormData');
       if (saved) {
@@ -391,19 +391,24 @@ const Index = () => {
         setProductName(data.productName || '');
         setProductDescription(data.productDescription || '');
         setAspectRatio(data.aspectRatio || 'Portrait');
+        // Restore image preview if exists
+        if (data.filePreview) {
+          setFilePreview(data.filePreview);
+        }
       }
     }, []);
 
-    // Persist data on change
+    // Persist data on change (including image preview)
     useEffect(() => {
       const formData = {
         prompt,
         productName,
         productDescription,
-        aspectRatio
+        aspectRatio,
+        filePreview // Save the base64 preview so images persist
       };
       localStorage.setItem('createAdFormData', JSON.stringify(formData));
-    }, [prompt, productName, productDescription, aspectRatio]);
+    }, [prompt, productName, productDescription, aspectRatio, filePreview]);
 
     const handleFileChange = (selectedFile: File | null) => {
       setFile(selectedFile);
@@ -428,96 +433,65 @@ const Index = () => {
         showNotification('error', 'Please configure at least one n8n webhook in Settings!');
         return;
       }
-      
-      if (!settings.supabaseUrl) {
-        showNotification('error', 'Please configure Supabase URL in Settings!');
-        return;
-      }
 
       setLoading(true);
       try {
-        const supabase = getSupabase();
-
-        const payload = {
-            post_title: activeTab === 'reels' 
-                ? 'Update Product Image' 
-                : (productName || 'Ad Campaign'),
-            caption: prompt, 
-            hashtag: null,
-            video_url: null,
-            youtube_post_status: 'pending',
-            facebook_post_status: 'pending',
-            instagram_post_status: 'pending'
-        };
-
-        if (supabase) {
-            const { data, error } = await supabase
-                .from(settings.tableName)
-                .insert([payload])
-                .select()
-                .single();
-            
-            if (error) throw error;
-
-            // Prepare file data for n8n
-            let fileData = null;
-            if (file) {
-              const base64 = await new Promise<string>((resolve) => {
+        // Prepare file data for n8n
+        let fileData = null;
+        if (file || filePreview) {
+          // Use existing file or restore from preview
+          const base64 = file 
+            ? await new Promise<string>((resolve) => {
                 const reader = new FileReader();
                 reader.onloadend = () => resolve(reader.result as string);
                 reader.readAsDataURL(file);
-              });
-              fileData = {
-                name: file.name,
-                type: file.type,
-                data: base64
-              };
-            }
+              })
+            : filePreview; // Use saved preview if no new file
 
-            // Send comprehensive data to n8n webhook for "Create Ad" functionality
-            const webhookPayload = {
-                // Database record
-                id: data.id,
-                post_title: data.post_title,
-                caption: data.caption,
-                video_url: data.video_url,
-                hashtag: data.hashtag,
-                youtube_post_status: data.youtube_post_status,
-                facebook_post_status: data.facebook_post_status,
-                instagram_post_status: data.instagram_post_status,
-                
-                // Additional details for n8n processing
-                type: activeTab,
-                prompt_text: prompt,
-                product_name: productName || null,
-                product_description: productDescription || null,
-                aspect_ratio: aspectRatio,
-                file: fileData,
-                timestamp: new Date().toISOString()
-            };
-
-            // Use Generate webhook if configured, otherwise fall back to Post webhook
-            const targetWebhook = settings.n8nGenerateWebhook || settings.n8nPostWebhook;
-            
-            console.log('Sending to n8n webhook (Create Ad):', targetWebhook);
-            console.log('Webhook payload:', { ...webhookPayload, file: fileData ? 'FILE_DATA_PRESENT' : null });
-
-            const webhookResponse = await fetch(targetWebhook, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(webhookPayload),
-            });
-
-            if (!webhookResponse.ok) {
-                const errorText = await webhookResponse.text();
-                throw new Error(`Webhook failed (${webhookResponse.status}): ${errorText}`);
-            }
-            
-            console.log('Webhook response:', await webhookResponse.text());
-            showNotification('success', 'Ad generation request sent successfully!');
-            // Don't clear form data - data persists until manually cleared
-            setActiveView('dashboard');
+          fileData = {
+            name: file?.name || 'uploaded-image',
+            type: file?.type || 'image/jpeg',
+            data: base64
+          };
         }
+
+        // Send data directly to n8n webhook - NO DATABASE INSERT for "Create Ad"
+        const webhookPayload = {
+          // Ad creation details
+          type: activeTab,
+          post_title: activeTab === 'reels' 
+            ? 'Update Product Image' 
+            : (productName || 'Ad Campaign'),
+          caption: prompt,
+          prompt_text: prompt,
+          product_name: productName || null,
+          product_description: productDescription || null,
+          aspect_ratio: aspectRatio,
+          file: fileData,
+          timestamp: new Date().toISOString()
+        };
+
+        // Use Generate webhook if configured, otherwise fall back to Post webhook
+        const targetWebhook = settings.n8nGenerateWebhook || settings.n8nPostWebhook;
+        
+        console.log('Sending to n8n webhook (Create Ad):', targetWebhook);
+        console.log('Webhook payload:', { ...webhookPayload, file: fileData ? 'FILE_DATA_PRESENT' : null });
+
+        const webhookResponse = await fetch(targetWebhook, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(webhookPayload),
+        });
+
+        if (!webhookResponse.ok) {
+          const errorText = await webhookResponse.text();
+          throw new Error(`Webhook failed (${webhookResponse.status}): ${errorText}`);
+        }
+        
+        console.log('Webhook response:', await webhookResponse.text());
+        showNotification('success', 'Ad generation request sent successfully!');
+        // Don't clear form data - data persists until manually cleared
+        setActiveView('dashboard');
 
       } catch (err: any) {
         console.error('Submit error:', err);
