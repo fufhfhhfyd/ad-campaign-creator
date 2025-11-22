@@ -95,13 +95,18 @@ const Index = () => {
   };
 
   const handlePostToSocials = async (video: VideoPost) => {
-    if (!settings.n8nPostWebhook) {
-      showNotification('error', 'Please configure n8n Post to Socials Webhook in Settings');
+    // Use Post webhook if configured, otherwise fall back to Generate webhook
+    const webhookUrl = settings.n8nPostWebhook || settings.n8nGenerateWebhook;
+    
+    if (!webhookUrl) {
+      showNotification('error', 'Please configure at least one n8n webhook in Settings');
       return;
     }
 
     try {
-      const response = await fetch(settings.n8nPostWebhook, {
+      console.log('Sending to n8n webhook (Post to Socials):', webhookUrl);
+      
+      const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(video),
@@ -375,6 +380,7 @@ const Index = () => {
     const [filePreview, setFilePreview] = useState<string | null>(null);
     const [productName, setProductName] = useState('');
     const [productDescription, setProductDescription] = useState('');
+    const [aspectRatio, setAspectRatio] = useState<'Portrait' | 'Landscape'>('Portrait');
 
     const handleFileChange = (selectedFile: File | null) => {
       setFile(selectedFile);
@@ -391,8 +397,12 @@ const Index = () => {
 
     const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      if (!settings.supabaseUrl || !settings.n8nGenerateWebhook) {
-        showNotification('error', 'Please configure Settings first!');
+      
+      // Check if at least one webhook is configured
+      const webhookUrl = settings.n8nGenerateWebhook || settings.n8nPostWebhook;
+      
+      if (!settings.supabaseUrl || !webhookUrl) {
+        showNotification('error', 'Please configure Supabase URL and at least one n8n webhook in Settings!');
         return;
       }
 
@@ -436,7 +446,7 @@ const Index = () => {
               };
             }
 
-            // Send comprehensive data to n8n webhook
+            // Send comprehensive data to n8n webhook for "Create Ad" functionality
             const webhookPayload = {
                 // Database record
                 id: data.id,
@@ -453,14 +463,18 @@ const Index = () => {
                 prompt_text: prompt,
                 product_name: productName || null,
                 product_description: productDescription || null,
+                aspect_ratio: aspectRatio,
                 file: fileData,
                 timestamp: new Date().toISOString()
             };
 
-            console.log('Sending to n8n webhook:', settings.n8nGenerateWebhook);
+            // Use Generate webhook if configured, otherwise fall back to Post webhook
+            const targetWebhook = settings.n8nGenerateWebhook || settings.n8nPostWebhook;
+            
+            console.log('Sending to n8n webhook (Create Ad):', targetWebhook);
             console.log('Webhook payload:', { ...webhookPayload, file: fileData ? 'FILE_DATA_PRESENT' : null });
 
-            const webhookResponse = await fetch(settings.n8nGenerateWebhook, {
+            const webhookResponse = await fetch(targetWebhook, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(webhookPayload),
@@ -478,6 +492,7 @@ const Index = () => {
             setFilePreview(null);
             setProductName('');
             setProductDescription('');
+            setAspectRatio('Portrait');
             setActiveView('dashboard');
         }
 
@@ -560,6 +575,37 @@ const Index = () => {
                  value={prompt}
                  onChange={e => setPrompt(e.target.value)}
                />
+            </div>
+
+            {/* Aspect Ratio - For ALL tabs */}
+            <div className="space-y-3 animate-in fade-in slide-in-from-bottom-4">
+              <label className="block text-sm font-bold text-foreground">
+                Choose Aspect Ratio
+              </label>
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setAspectRatio('Portrait')}
+                  className={`p-4 rounded-xl border-2 font-semibold transition-all ${
+                    aspectRatio === 'Portrait'
+                      ? 'border-primary bg-primary/10 text-primary shadow-medium'
+                      : 'border-border text-muted-foreground hover:border-primary/50 hover:bg-muted'
+                  }`}
+                >
+                  Portrait (9:16)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAspectRatio('Landscape')}
+                  className={`p-4 rounded-xl border-2 font-semibold transition-all ${
+                    aspectRatio === 'Landscape'
+                      ? 'border-primary bg-primary/10 text-primary shadow-medium'
+                      : 'border-border text-muted-foreground hover:border-primary/50 hover:bg-muted'
+                  }`}
+                >
+                  Landscape (16:9)
+                </button>
+              </div>
             </div>
 
             {activeTab !== 'reels' && (
